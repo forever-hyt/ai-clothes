@@ -1,36 +1,32 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 衣境 AI · 模型服装替换
 
-## Getting Started
+原 my-saas 项目已迁入新版米白与绿色换装工作台。保留 Next.js / Node.js 架构，主页公开访问。
 
-First, run the development server:
+## 在 VS Code 中运行
 
-```bash
+打开 my-saas 文件夹，在终端执行：
+
+```powershell
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+访问 http://localhost:3000 。当前旧项目的开发服务会自动加载修改。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+人物与服装图片支持 JPG、PNG、WebP，每张不超过 5MB，可拖拽上传、预览、移除。结果仍为演示人物原图，不是真实 AI 换装。点击右上角头像可登录：测试账号 admin，密码 Admin123!。注册尚未开放，未登录可以完整体验主页。
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 代码位置
 
-## Learn More
+- app/page.tsx：新版主页与登录弹窗。
+- app/globals.css：桌面与手机布局。
+- public/app.js：上传、预览、生成与账号交互。
+- app/api/[...segments]/route.ts：账户状态、登录、退出、AI 演示接口。
+- app/layout.tsx：网站标题与元信息。
 
-To learn more about Next.js, take a look at the following resources:
+接口：GET /api/auth/me、POST /api/auth/login、POST /api/auth/logout、POST /api/try-on。AI 请求 JSON 为 personImage 与 clothingImage 图片 Data URL；真实模型接入位置在 route.ts 的演示返回处。
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+可以在 .env.local 配置 LOGIN_USERNAME、LOGIN_PASSWORD、COOKIE_SECURE。本地 HTTP 不启用 Secure Cookie；HTTPS 部署启用。会话保存在单进程内存中，有效两小时，重启后失效；图片不保存到服务器。
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 部署
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+执行 npm run build，然后 npm start。通过系统服务保持 Node.js 运行，配置域名与 HTTPS 反向代理。正式开放前添加接口限流，多实例使用共享会话存储。AI 密钥仅放服务端环境变量。
