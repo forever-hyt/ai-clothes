@@ -2,83 +2,53 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import ts from 'typescript';
 
-function setup() {
-  const elements = new Map();
-  const element = id => {
-    if (!elements.has(id)) elements.set(id, {
-      hidden: ['result-output', 'account-menu', 'logout'].includes(id),
-      disabled: false, checked: false, value: '', textContent: '', innerHTML: '',
-      listeners: {}, classList: { toggle() {}, add() {}, remove() {} },
-      addEventListener(name, handler) { this.listeners[name] = handler; },
-      setAttribute() {}, removeAttribute(name) { delete this[name]; },
-      closest() { return element(`${id}-parent`); },
-      querySelector() { return element(`${id}-prompt`); },
-      click() { return this.listeners.click?.(); },
-      showModal() { this.open = true; },
-      close() { this.open = false; this.listeners.close?.(); },
-      focus() { this.focused = true; }, scrollIntoView() {},
-    });
-    return elements.get(id);
-  };
-  const reads = [], requests = [];
-  const context = vm.createContext({
-    document: { getElementById: element, addEventListener() {} },
-    window: { matchMedia: () => ({ matches: false }) },
-    AbortSignal, setInterval() {},
-    FileReader: class {
-      readAsDataURL() { reads.push(() => { this.result = 'data:image/png;base64,test'; this.onload(); }); }
-    },
-    Image: class { naturalWidth = 20; naturalHeight = 20; async decode() {} },
-    fetch: async (url, options) => {
-      requests.push({ url, options });
-      return { ok: true, json: async () => ({ user: options ? { username: 'tester' } : null, mode: 'demo', resultUrl: 'data:image/webp;base64,result', remaining: 19, message: '演示' }) };
-    },
-  });
-  vm.runInContext(fs.readFileSync('public/app.js', 'utf8'), context);
-  return { element, context, reads, requests, run: code => vm.runInContext(code, context) };
+function load(file, globals = {}) {
+  const context = vm.createContext({ exports: {}, ...globals });
+  const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  vm.runInContext(source, context);
+  return context.exports;
 }
-const tick = () => new Promise(resolve => setImmediate(resolve));
 
-test('clearing during image decoding prevents photos reappearing and resets consent', async () => {
-  const ui = setup(); await tick();
-  const pending = ui.run("choose('person', {type:'image/png', size:100, name:'photo.png'})");
-  assert.equal(ui.element('generate').disabled, true);
-  assert.equal(ui.element('clear-images').disabled, false);
-  ui.element('privacy-consent').checked = true;
-  ui.element('clear-images').click();
-  ui.reads.shift()(); await pending;
-  assert.equal(ui.run('state.person'), null);
-  assert.equal(ui.element('privacy-consent').checked, false);
-  assert.equal(ui.element('generate').disabled, true);
+test('both languages cover the same interface and error keys', () => {
+  const { copy } = load('app/studio-copy.ts');
+  assert.deepEqual(Object.keys(copy.zh).sort(), Object.keys(copy.en).sort());
+  for (const language of ['zh', 'en']) for (const value of Object.values(copy[language])) assert.ok(value.trim());
+  assert.match(copy.en.resultNote, /not an AI try-on/);
+  assert.match(copy.zh.unavailable, /未开放/);
 });
 
-test('login preserves materials and requires an explicit preview click', async () => {
-  const ui = setup(); await tick();
-  ui.run("state.person = 'person'; state.clothing = 'clothing';");
-  ui.element('privacy-consent').checked = true; ui.run('update()');
-  assert.equal(ui.element('generate').textContent, '登录后开始演示');
-  await ui.element('generate').click();
-  assert.equal(ui.element('login-dialog').open, true);
-  ui.element('username').value = 'tester'; ui.element('password').value = 'test';
-  await ui.element('login-form').listeners.submit({ preventDefault() {} });
-  assert.equal(ui.element('password').value, '');
-  assert.equal(ui.element('generate').focused, true);
-  assert.equal(ui.requests.filter(r => r.url === '/api/try-on').length, 0);
-  await ui.element('generate').click();
-  assert.equal(ui.element('result-output').hidden, false);
-  assert.equal(ui.element('download-result').href, 'data:image/webp;base64,result');
-  assert.equal(ui.element('generate').textContent, '重新运行演示');
+test('uploads reject unsupported, empty, oversized and excessive-pixel images', async () => {
+  const api = load('app/studio-images.ts', {
+    FileReader: class { readAsDataURL() { this.result = 'data:image/png;base64,test'; this.onload(); } },
+    Image: class { naturalWidth = 6000; naturalHeight = 6000; async decode() {} },
+  });
+  await assert.rejects(api.readMaterial({ type: 'image/svg+xml', size: 100 }), /invalid/);
+  await assert.rejects(api.readMaterial({ type: 'image/png', size: 0 }), /invalid/);
+  await assert.rejects(api.readMaterial({ type: 'image/png', size: 6 * 1024 * 1024 }), /invalid/);
+  await assert.rejects(api.readMaterial({ type: 'image/png', size: 100 }), /pixels/);
 });
 
-test('preview cannot submit without consent or while replacement is decoding', async () => {
-  const ui = setup(); await tick();
-  ui.run("state.person = 'person'; state.clothing = 'clothing'; renderUser({username:'tester'});");
-  await ui.element('generate').click();
-  ui.element('privacy-consent').checked = true;
-  const pending = ui.run("choose('person', {type:'image/png', size:100, name:'replacement.png'})");
-  await ui.element('generate').click();
-  assert.equal(ui.requests.filter(r => r.url === '/api/try-on').length, 0);
-  ui.reads.shift()(); await pending;
-  assert.equal(ui.element('generate').disabled, false);
+test('local boards export both sources and a scaled metadata-free portrait', async () => {
+  const canvases = [], draws = [];
+  const api = load('app/studio-images.ts', {
+    Image: class { naturalWidth = 3000; naturalHeight = 4000; async decode() {} },
+    document: { createElement() {
+      const canvas = { width: 0, height: 0, getContext: () => ({ fillRect() {}, fillText() {}, drawImage(...args) { draws.push(args); } }), toDataURL: type => `data:${type};base64,test` };
+      canvases.push(canvas); return canvas;
+    } },
+  });
+  const previews = await api.makePreviews('portrait', 'clothing');
+  assert.equal(canvases[0].width, 1200);
+  assert.equal(canvases[0].height, 1600);
+  assert.equal(canvases[1].width, 1400);
+  assert.equal(draws.length, 3);
+  assert.equal(draws[1][0].src, 'portrait');
+  assert.equal(draws[2][0].src, 'clothing');
+  assert.match(previews.board, /^data:image\/png/);
+  const samples = api.sampleMaterials();
+  assert.ok(samples.person.url.startsWith('data:image/svg+xml'));
+  assert.ok(samples.clothing.url.startsWith('data:image/svg+xml'));
+  assert.equal(decodeURIComponent(samples.person.url).includes('http://www.w3.org/2000/svg'), true);
 });

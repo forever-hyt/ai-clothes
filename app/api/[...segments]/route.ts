@@ -38,8 +38,22 @@ function token(request: Request) {
 function purge() {
   for (const [key, expiry] of sessions) if (expiry <= Date.now()) sessions.delete(key);
 }
+const errorCodes: Record<string, string> = {
+  '管理员尚未配置安全登录账号': 'AUTH_UNAVAILABLE',
+  '请先登录，再提交图片': 'AUTH_REQUIRED',
+  '用户名或密码错误': 'INVALID_CREDENTIALS',
+  '请求来源无效': 'INVALID_ORIGIN',
+  '登录尝试过于频繁，请一分钟后重试': 'RATE_LIMITED',
+  '请求过于频繁，请一分钟后重试': 'RATE_LIMITED',
+  '请先确认图片处理说明': 'CONSENT_REQUIRED',
+  '今日演示次数已用完（每日 20 次）': 'QUOTA_EXCEEDED',
+  '已有图片正在处理，请稍后重试': 'PROCESSING',
+  '请上传可解码的 JPG、PNG 或 WebP 静态图片，每张不超过 5MB，最多 2000 万像素': 'INVALID_IMAGE',
+};
 function json(body: unknown, status = 200, cookie?: string) {
-  return Response.json(body, { status, headers: { 'Cache-Control': 'no-store', ...(cookie ? { 'Set-Cookie': cookie } : {}) } });
+  const error = body && typeof body === 'object' && 'error' in body ? String(body.error) : null;
+  const payload = error ? { ...body as object, code: errorCodes[error] || 'INVALID_REQUEST' } : body;
+  return Response.json(payload, { status, headers: { 'Cache-Control': 'no-store', ...(cookie ? { 'Set-Cookie': cookie } : {}) } });
 }
 function cookie(value: string, maxAge: number) {
   return `session=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${process.env.NODE_ENV === 'production' || process.env.COOKIE_SECURE === 'true' ? '; Secure' : ''}`;
@@ -57,13 +71,15 @@ function validImage(value: unknown) {
 export async function GET(request: Request) {
   if (new URL(request.url).pathname !== '/api/auth/me') return json({ error: '接口不存在' }, 404);
   purge();
-  return json({ user: sessions.has(token(request)) ? { username, avatar: null } : null });
+  return json({ user: sessions.has(token(request)) ? { username, avatar: null } : null, loginAvailable: Boolean(username && hashReady) });
 }
 export async function POST(request: Request) {
   const route = new URL(request.url).pathname;
   if (!['/api/auth/login', '/api/auth/logout', '/api/try-on'].includes(route)) return json({ error: '接口不存在' }, 404);
   const origin = request.headers.get('origin');
-  const expectedOrigin = process.env.APP_ORIGIN || new URL(request.url).origin;
+  let expectedOrigin: string;
+  try { expectedOrigin = new URL(process.env.APP_ORIGIN || request.url).origin; }
+  catch { return json({ error: '请求来源无效' }, 503); }
   if (origin !== expectedOrigin || request.headers.get('sec-fetch-site') === 'cross-site') return json({ error: '请求来源无效' }, 403);
   purge();
   if (route === '/api/try-on' && !sessions.has(token(request))) return json({ error: '请先登录，再提交图片' }, 401);

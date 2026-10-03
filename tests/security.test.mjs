@@ -11,7 +11,7 @@ test('auth, consent, image validation, metadata removal and rate limits', async 
   const salt = Buffer.alloc(16, 9);
   process.env.LOGIN_USERNAME = 'security-test';
   process.env.LOGIN_PASSWORD_HASH = `${salt.toString('hex')}:${scryptSync('test-only-password', salt, 64).toString('hex')}`;
-  process.env.APP_ORIGIN = 'https://example.test';
+  process.env.APP_ORIGIN = 'https://example.test/';
   const filename = path.resolve('app/api/[...segments]/route.ts');
   const compiled = ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText;
   const loaded = new Module(filename);
@@ -19,12 +19,18 @@ test('auth, consent, image validation, metadata removal and rate limits', async 
   loaded.paths = Module._nodeModulePaths(path.dirname(filename));
   loaded._compile(compiled, filename);
   const api = loaded.exports;
+  const available = await (await api.GET(new Request('https://example.test/api/auth/me'))).json();
+  assert.equal(available.loginAvailable, true);
+  assert.equal(available.user, null);
+  assert.equal(JSON.stringify(available).includes(process.env.LOGIN_PASSWORD_HASH), false);
   const post = (route, body, cookie = '', origin = 'https://example.test') => api.POST(new Request(`https://example.test/api/${route}`, { method: 'POST', headers: { origin, cookie, 'content-type': 'application/json' }, body: JSON.stringify(body) }));
   assert.equal((await post('try-on', {})).status, 401);
   assert.equal((await post('auth/login', {}, '', 'https://evil.test')).status, 403);
   const login = await post('auth/login', { username: 'security-test', password: 'test-only-password' });
   assert.equal(login.status, 200);
   const cookie = login.headers.get('set-cookie').split(';')[0];
+  const current = await api.GET(new Request('https://example.test/api/auth/me', { headers: { cookie } }));
+  assert.equal((await current.json()).user.username, 'security-test');
   assert.match(login.headers.get('set-cookie'), /HttpOnly/);
   assert.equal((await post('try-on', {}, cookie)).status, 400);
   assert.equal((await post('try-on', { privacyConsent: true, personImage: 'data:image/png;base64,YWJj', clothingImage: 'invalid' }, cookie)).status, 400);
@@ -41,6 +47,22 @@ test('auth, consent, image validation, metadata removal and rate limits', async 
   assert.equal((await post('try-on', {}, cookie)).status, 429);
   await post('auth/logout', {}, cookie);
   assert.equal((await post('try-on', {}, cookie)).status, 401);
+});
+
+test('unconfigured login is explicit and does not issue a session', async () => {
+  delete process.env.LOGIN_USERNAME;
+  delete process.env.LOGIN_PASSWORD_HASH;
+  process.env.APP_ORIGIN = 'https://example.test';
+  const filename = path.resolve('app/api/[...segments]/route.ts');
+  const compiled = ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText;
+  const loaded = new Module(filename); loaded.filename = filename; loaded.paths = Module._nodeModulePaths(path.dirname(filename)); loaded._compile(compiled, filename);
+  const api = loaded.exports;
+  const current = await api.GET(new Request('https://example.test/api/auth/me'));
+  assert.equal((await current.json()).loginAvailable, false);
+  const login = await api.POST(new Request('https://example.test/api/auth/login', { method: 'POST', headers: { origin: 'https://example.test', 'content-type': 'application/json' }, body: JSON.stringify({ username: 'example', password: 'example' }) }));
+  assert.equal(login.status, 503);
+  assert.equal((await login.json()).code, 'AUTH_UNAVAILABLE');
+  assert.equal(login.headers.get('set-cookie'), null);
 });
 
 
