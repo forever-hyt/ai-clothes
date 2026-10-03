@@ -1,32 +1,23 @@
-# 衣境 AI · 模型服装替换
+# 衣境 AI · 安全演示
 
-原 my-saas 项目已迁入新版米白与绿色换装工作台。保留 Next.js / Node.js 架构，主页公开访问。
+真实 AI、数据库、注册及支付尚未接入。
 
-## 在 VS Code 中运行
+## 服务器配置
 
-打开 my-saas 文件夹，在终端执行：
+部署平台服务器环境变量：LOGIN_USERNAME、LOGIN_PASSWORD_HASH、APP_ORIGIN（HTTPS 网站完整来源，无末尾斜杠）、PRIVACY_CONTACT（公开展示的联系方式）。未设置账号或有效哈希时拒绝登录，旧测试密码已停用。
 
-```powershell
-npm install
-npm run dev
-```
+哈希格式：16 字节盐的十六进制字符串 + 冒号 + 64 字节 scrypt 哈希的十六进制字符串，使用 Node scrypt 默认参数。离线生成，勿把明文密码写进源码、命令历史或日志。
 
-访问 http://localhost:3000 。当前旧项目的开发服务会自动加载修改。
+AI、数据库、支付密钥只放服务器环境变量。禁止 NEXT_PUBLIC_ 前缀、硬编码进页面/public、提交 Git、写日志或返回浏览器。当前未调用任何 AI 服务商。
 
-人物与服装图片支持 JPG、PNG、WebP，每张不超过 5MB，可拖拽上传、预览、移除。结果仍为演示人物原图，不是真实 AI 换装。点击右上角头像可登录：测试账号 admin，密码 Admin123!。注册尚未开放，未登录可以完整体验主页。
+运行 npm install、npm run dev。本地 APP_ORIGIN=http://localhost:3000。生产 npm run build 后 npm start；配置 HTTPS。生产 Cookie 强制 Secure、HttpOnly、SameSite=Strict。
 
-## 代码位置
+## 保护措施
 
-- app/page.tsx：新版主页与登录弹窗。
-- app/globals.css：桌面与手机布局。
-- public/app.js：上传、预览、生成与账号交互。
-- app/api/[...segments]/route.ts：账户状态、登录、退出、AI 演示接口。
-- app/layout.tsx：网站标题与元信息。
+登录和明确同意才可生成；同源校验；登录与生成限流；每日 20 次演示；单次并发处理；5MB / 2000 万像素限制；真实 JPEG/PNG/WebP 解码重编码清除元数据；拒绝动画。图片只在请求内存处理，不落盘、不发送第三方。页面下载、手动清除及每 30 分钟自动清理。隐私和条款入口，基础安全响应头。
 
-接口：GET /api/auth/me、POST /api/auth/login、POST /api/auth/logout、POST /api/try-on。AI 请求 JSON 为 personImage 与 clothingImage 图片 Data URL；真实模型接入位置在 route.ts 的演示返回处。
+## 公网部署边界
 
-可以在 .env.local 配置 LOGIN_USERNAME、LOGIN_PASSWORD、COOKIE_SECURE。本地 HTTP 不启用 Secure Cookie；HTTPS 部署启用。会话保存在单进程内存中，有效两小时，重启后失效；图片不保存到服务器。
+当前适合单进程、授权账号的受限演示。会话和配额存在内存，重启重置，多实例不共享。正式 SaaS 还需要共享会话、持久化账号/配额/任务、边缘请求限流及超时、真实运营方联系方式。AI 接入需先确认服务商及隐私规则。不落盘方案无需图片存储清理任务。
 
-## 部署
-
-执行 npm run build，然后 npm start。通过系统服务保持 Node.js 运行，配置域名与 HTTPS 反向代理。正式开放前添加接口限流，多实例使用共享会话存储。AI 密钥仅放服务端环境变量。
+这些修改必须重新部署并重启公网服务才生效。旧默认账号需立即停用。若密钥曾进入 Git、前端产物或日志，必须在供应商处撤销/轮换；删除源码不能让泄露密钥失效。代理、APM 和托管日志不要保存请求体、Cookie 或图片。本地检查不等于公网服务器审计。

@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "衣境 AI · 模型服装替换",
-  description: "上传人物与服装图片，探索你的下一套穿搭。无需登录即可体验；当前为演示模式。",
+  description: "衣境 AI 穿搭工作台：上传人物与服装图片，私密预览与下载。当前为演示版，提交处理需登录。",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

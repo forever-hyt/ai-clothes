@@ -2,9 +2,29 @@ const $ = id => document.getElementById(id);
 const state = { person: null, clothing: null };
 const versions = { person: 0, clothing: 0 };
 let busy = false;
+let currentUser = null;
 const status = (message, error = false) => { $('status').textContent = message; $('status').classList.toggle('error', error); };
-const update = () => { $('generate').disabled = busy || !state.person || !state.clothing; };
-function resetResult() { $('result-output').hidden = true; $('result-empty').hidden = false; $('result-tag').textContent = '等待你的灵感'; $('result-image').removeAttribute('src'); }
+const update = () => {
+  const count = Number(Boolean(state.person)) + Number(Boolean(state.clothing));
+  $('generate').disabled = busy || count !== 2 || !$('privacy-consent').checked;
+  $('clear-images').disabled = busy || count === 0;
+  $('material-count').textContent = `${count} / 2 已就绪`;
+  for (const kind of ['person', 'clothing']) {
+    $(`${kind}-zone`).closest('.upload-card').classList.toggle('has-image', Boolean(state[kind]));
+    $(`${kind}-badge`).textContent = state[kind] ? '✓ 已上传' : '待上传';
+  }
+  const complete = !$('result-output').hidden;
+  const activeStep = complete ? 'step-result' : (count === 2 ? 'step-process' : 'step-upload');
+  for (const id of ['step-upload', 'step-process', 'step-result']) {
+    $(id).classList.toggle('active', id === activeStep);
+    $(id).classList.toggle('done', id === 'step-upload' && count === 2);
+    if (id === activeStep) $(id).setAttribute('aria-current', 'step'); else $(id).removeAttribute('aria-current');
+  }
+  $('generate').classList.toggle('loading', busy);
+  $('generate').setAttribute('aria-busy', String(busy));
+  $('result-empty').closest('.results').classList.toggle('is-processing', busy);
+};
+function resetResult() { $('result-output').hidden = true; $('result-empty').hidden = false; $('result-tag').textContent = '等待预览'; $('result-image').removeAttribute('src'); $('download-result').removeAttribute('href'); }
 async function choose(kind, file) {
   if (!file || busy) return;
   const version = ++versions[kind];
@@ -18,7 +38,7 @@ async function choose(kind, file) {
     $(`${kind}-zone`).querySelector('.upload-prompt').hidden = true;
     $(`${kind}-name`).textContent = file.name;
     $(`${kind}-remove`).hidden = false;
-    resetResult(); status(state.person && state.clothing ? '图片已就绪，开始你的穿搭实验' : '请继续上传另一张图片'); update();
+    resetResult(); status(state.person && state.clothing ? '素材已就绪，确认图片处理说明后即可预览' : '已上传一张图片，请继续上传另一张'); update();
   } catch { if (version === versions[kind]) status('无法读取这张图片，请选择有效的图片文件', true); }
 }
 for (const kind of ['person', 'clothing']) {
@@ -32,7 +52,7 @@ for (const kind of ['person', 'clothing']) {
     $(`${kind}-preview`).hidden = true; $(`${kind}-preview`).removeAttribute('src');
     zone.querySelector('.upload-prompt').hidden = false; $(`${kind}-remove`).hidden = true;
     $(`${kind}-name`).textContent = kind === 'person' ? '建议使用清晰、完整的人物正面照片' : '建议使用背景简洁的服装展示图片';
-    resetResult(); status('上传两张图片，即可开始体验'); update();
+    resetResult(); status('请补齐两张图片，再确认图片处理说明'); update();
   });
 }
 async function api(url, body) {
@@ -41,20 +61,22 @@ async function api(url, body) {
 }
 $('generate').addEventListener('click', async () => {
   if (busy || !state.person || !state.clothing) return;
-  busy = true; update(); resetResult();
+  if (!currentUser) { $('login-error').textContent = '请先登录，再提交图片'; $('login-dialog').showModal(); return; }
+  busy = true; resetResult(); update();
   for (const kind of ['person', 'clothing']) { $(`${kind}-input`).disabled = true; $(`${kind}-remove`).disabled = true; }
-  $('generate').textContent = '正在处理…'; status('正在运行演示流程，请稍候');
+  $('generate').textContent = '正在准备预览…'; $('result-tag').textContent = '正在处理'; status('正在安全处理图片，请稍候');
   try {
-    const data = await api('/api/try-on', { personImage: state.person, clothingImage: state.clothing });
-    $('result-image').src = data.mode === 'demo' ? state.person : data.resultUrl;
+    const data = await api('/api/try-on', { personImage: state.person, clothingImage: state.clothing, privacyConsent: $('privacy-consent').checked });
+    $('result-image').src = data.resultUrl;
+    $('download-result').href = data.resultUrl;
     $('result-image').alt = data.mode === 'demo' ? '演示结果：上传的人物原图，未进行 AI 换装' : 'AI 换装结果';
     $('result-note').textContent = data.message;
     $('result-tag').textContent = data.mode === 'demo' ? '演示预览 · 人物原图' : '生成完成';
     $('result-empty').hidden = true; $('result-output').hidden = false;
-    status('演示流程已完成，真实 AI 换装功能将在接入模型后开放');
-  } catch (error) { status(error.name === 'TimeoutError' ? '请求超时，请重试' : error.message, true); }
+    status(`演示已完成，今日剩余 ${data.remaining} 次。真实 AI 换装尚未接入。`);
+  } catch (error) { $('result-tag').textContent = '处理未完成'; status(error.name === 'TimeoutError' ? '请求超时，请重试' : error.message, true); }
   finally {
-    busy = false; update(); $('generate').textContent = '✦  开始 AI 换装  →';
+    busy = false; update(); $('generate').innerHTML = '<span aria-hidden="true">✦</span><span>开始演示预览</span><span aria-hidden="true">→</span>';
     for (const kind of ['person', 'clothing']) { $(`${kind}-input`).disabled = false; $(`${kind}-remove`).disabled = false; }
   }
 });
@@ -65,9 +87,11 @@ document.addEventListener('click', e => { if (!e.target.closest('.account')) clo
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
 const defaultAvatar = $('avatar').innerHTML;
 function renderUser(user) {
+  currentUser = user;
   $('avatar').classList.toggle('signed-in', Boolean(user));
   if (user) $('avatar').textContent = user.username.slice(0, 1).toUpperCase(); else $('avatar').innerHTML = defaultAvatar;
   $('account-label').textContent = user ? `已登录 · ${user.username}` : '欢迎来到衣境 AI';
+  $('account-hint').textContent = user ? '已登录 · 开始创作' : '登录后开始体验';
   $('login-entry').hidden = Boolean(user); $('logout').hidden = !user;
 }
 $('login-entry').addEventListener('click', () => { closeMenu(); $('login-error').textContent = ''; $('login-dialog').showModal(); });
@@ -79,4 +103,15 @@ $('login-form').addEventListener('submit', async e => {
   finally { $('login-submit').disabled = false; }
 });
 $('logout').addEventListener('click', async () => { try { await api('/api/auth/logout', {}); renderUser(null); closeMenu(); } catch (error) { status(error.message, true); } });
-fetch('/api/auth/me').then(r => { if (!r.ok) throw new Error(); return r.json(); }).then(data => renderUser(data.user)).catch(() => status('账户状态暂时无法加载，图片体验仍可使用', true));
+fetch('/api/auth/me').then(r => { if (!r.ok) throw new Error(); return r.json(); }).then(data => renderUser(data.user)).catch(() => status('账户状态暂时无法加载，请稍后重试', true));
+$('privacy-consent').addEventListener('change', () => {
+  update();
+  if (state.person && state.clothing) status($('privacy-consent').checked ? (currentUser ? '一切就绪，点击开始演示预览' : '确认已完成，点击开始预览后登录账号') : '请先确认图片处理说明');
+});
+function clearImages() {
+  for (const kind of ['person', 'clothing']) $(`${kind}-remove`).click();
+  resetResult(); $('download-result').removeAttribute('href');
+}
+$('clear-images').addEventListener('click', () => { if (!busy) { clearImages(); status('已清除本页面的人物、服装和结果图片'); } });
+setInterval(() => { if (!busy) { clearImages(); status('本页面图片已到期清除（最长保留 30 分钟）'); } }, 30 * 60 * 1000);
+update();
