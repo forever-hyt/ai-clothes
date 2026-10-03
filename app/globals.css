@@ -281,6 +281,22 @@ main:not(.studio-main) h1 { font-size:30px; }
 main:not(.studio-main) h2 { font-size:19px; margin-top:30px; }
 main:not(.studio-main) p { color:#66785f; font-size:14px; }
 main:not(.studio-main) a { display:inline-block; color:var(--green); text-decoration:underline; text-underline-offset:4px; }
+.dropzone:focus-within { outline:2px solid #7a9f69; outline-offset:4px; }
+button, #download-result, .choose-file { touch-action:manipulation; }
+.primary { justify-content:center; }
+.primary:active:not(:disabled) { transform:translateY(1px); box-shadow:none; }
+.file-line button, .avatar, .close, .menu button { min-height:44px; min-width:44px; }
+button:disabled { opacity:.65; }
+.consent { min-height:44px; cursor:pointer; }
+.consent input { width:20px; height:20px; }
+#result-title { scroll-margin-top:24px; }
+@media (max-width:560px) {
+  .action { position:sticky; bottom:0; z-index:2; background:#fff; padding:16px 0 max(12px, env(safe-area-inset-bottom)); }
+  .action p { overflow-wrap:anywhere; }
+  dialog input { font-size:16px; }
+  .upload-prompt small, .file-line { font-size:12px; }
+  #download-result, #clear-images { min-height:48px; font-size:13px; }
+}
 @keyframes spin { to { transform:rotate(360deg); } }
 @keyframes pulse { 50% { opacity:.35; transform:scale(.85); } }
 @media (max-width:1020px) {
