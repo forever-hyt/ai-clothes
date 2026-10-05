@@ -7,7 +7,7 @@ import { scryptSync } from 'node:crypto';
 import ts from 'typescript';
 import sharp from 'sharp';
 
-test('auth, consent, image validation, metadata removal and rate limits', async () => {
+test('auth, consent, image validation, blank rejection, closed review gate and rate limits', async () => {
   const salt = Buffer.alloc(16, 9);
   process.env.LOGIN_USERNAME = 'security-test';
   process.env.LOGIN_PASSWORD_HASH = `${salt.toString('hex')}:${scryptSync('test-only-password', salt, 64).toString('hex')}`;
@@ -33,17 +33,23 @@ test('auth, consent, image validation, metadata removal and rate limits', async 
   assert.equal((await current.json()).user.username, 'security-test');
   assert.match(login.headers.get('set-cookie'), /HttpOnly/);
   assert.equal((await post('try-on', {}, cookie)).status, 400);
-  assert.equal((await post('try-on', { privacyConsent: true, personImage: 'data:image/png;base64,YWJj', clothingImage: 'invalid' }, cookie)).status, 400);
+  assert.equal((await post('try-on', { privacyConsent: true, safetyConsent: true, serverConsent: true, personImage: 'data:image/png;base64,YWJj', clothingImage: 'invalid' }, cookie)).status, 400);
   const bytes = await sharp({ create: { width: 8, height: 8, channels: 3, background: 'red' } }).jpeg().withMetadata().toBuffer();
   const image = `data:image/jpeg;base64,${bytes.toString('base64')}`;
-  const success = await post('try-on', { privacyConsent: true, personImage: image, clothingImage: image }, cookie);
-  assert.equal(success.status, 200);
-  const data = await success.json();
-  const metadata = await sharp(Buffer.from(data.resultUrl.split(',')[1], 'base64')).metadata();
-  assert.equal(metadata.exif, undefined);
-  assert.equal(metadata.format, 'webp');
-  assert.equal((await post('try-on', { privacyConsent: true, personImage: image.replace('image/jpeg', 'image/png'), clothingImage: image }, cookie)).status, 400);
-  assert.equal((await post('try-on', {}, cookie)).status, 400);
+  const blank = await post('try-on', { privacyConsent: true, safetyConsent: true, serverConsent: true, personImage: image, clothingImage: image }, cookie);
+  assert.equal(blank.status, 400);
+  assert.equal((await blank.json()).code, 'BLANK_CLOTHING');
+  const raw = Buffer.alloc(8 * 8 * 3);
+  for (let i = 0; i < raw.length; i += 3) raw[i < raw.length / 2 ? i : i + 2] = 255;
+  const valid = await sharp(raw, { raw: { width: 8, height: 8, channels: 3 } }).jpeg().withMetadata().toBuffer();
+  const garment = `data:image/jpeg;base64,${valid.toString('base64')}`;
+  const stopped = await post('try-on', { privacyConsent: true, safetyConsent: true, serverConsent: true, personImage: image, clothingImage: garment, approved: true, source: 'builtin' }, cookie);
+  assert.equal(stopped.status, 503);
+  const data = await stopped.json();
+  assert.equal(data.code, 'MODERATION_UNAVAILABLE');
+  assert.equal(data.resultUrl, undefined);
+  assert.match(stopped.headers.get('cache-control'), /no-store/);
+  assert.equal((await post('try-on', { privacyConsent: true, safetyConsent: true, serverConsent: true, personImage: image, clothingImage: garment.replace('image/jpeg', 'image/png') }, cookie)).status, 400);
   assert.equal((await post('try-on', {}, cookie)).status, 429);
   await post('auth/logout', {}, cookie);
   assert.equal((await post('try-on', {}, cookie)).status, 401);
@@ -66,3 +72,48 @@ test('unconfigured login is explicit and does not issue a session', async () => 
 });
 
 
+
+
+async function protectedApi() {
+  const salt = Buffer.alloc(16, 7);
+  process.env.LOGIN_USERNAME = 'privacy-test';
+  process.env.LOGIN_PASSWORD_HASH = `${salt.toString('hex')}:${scryptSync('test-password-long', salt, 64).toString('hex')}`;
+  process.env.APP_ORIGIN = 'https://example.test';
+  const filename = path.resolve('app/api/[...segments]/route.ts');
+  const compiled = ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText;
+  const loaded = new Module(filename); loaded.filename = filename; loaded.paths = Module._nodeModulePaths(path.dirname(filename)); loaded._compile(compiled, filename);
+  let session = '';
+  const post = (route, body) => loaded.exports.POST(new Request(`https://example.test/api/${route}`, { method: 'POST', headers: { origin: 'https://example.test', cookie: session, 'content-type': 'application/json' }, body: JSON.stringify(body) }));
+  const login = await post('auth/login', { username: 'privacy-test', password: 'test-password-long' });
+  session = login.headers.get('set-cookie').split(';')[0];
+  return post;
+}
+
+test('server independently requires permitted-use and upload consent and missing clothes stop processing', async () => {
+  const post = await protectedApi();
+  const base = { privacyConsent: true, clothingImage: 'image', personImage: 'image' };
+  for (const value of ['', '   ']) {
+    const response = await post('try-on', { ...base, clothingImage: value, safetyConsent: true, serverConsent: true });
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).code, 'MISSING_CLOTHING');
+  }
+  const safety = await post('try-on', base);
+  assert.equal((await safety.json()).code, 'SAFETY_CONSENT_REQUIRED');
+  const upload = await post('try-on', { ...base, safetyConsent: true });
+  assert.equal((await upload.json()).code, 'SERVER_CONSENT_REQUIRED');
+  const local = await post('try-on', { ...base, privacyConsent: false, safetyConsent: true, serverConsent: true });
+  assert.equal((await local.json()).code, 'CONSENT_REQUIRED');
+});
+
+test('server rejects transparent hidden RGB and blank white or black garment images', async () => {
+  const post = await protectedApi();
+  for (const background of ['white', 'black', { r: 20, g: 150, b: 220, alpha: 0 }]) {
+    const bytes = await sharp({ create: { width: 128, height: 128, channels: 4, background } }).png().toBuffer();
+    const image = `data:image/png;base64,${bytes.toString('base64')}`;
+    const response = await post('try-on', { privacyConsent: true, safetyConsent: true, serverConsent: true, personImage: image, clothingImage: image });
+    assert.equal(response.status, 400);
+    const data = await response.json();
+    assert.equal(data.code, 'BLANK_CLOTHING');
+    assert.equal(data.resultUrl, undefined);
+  }
+});
