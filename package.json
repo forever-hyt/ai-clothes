@@ -11,10 +11,12 @@
     "setup-login": "node scripts/setup-login.mjs"
   },
   "dependencies": {
-    "sharp": "0.35.5",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.117.3",
     "next": "16.3.8",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

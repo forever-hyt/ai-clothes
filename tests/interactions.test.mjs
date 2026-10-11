@@ -6,6 +6,9 @@ import ts from 'typescript';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { isBlankPixels } from '../app/image-validation.mjs';
+import { patchTsResolution } from './helpers/ts-require.mjs';
+
+patchTsResolution();
 
 function load(file, globals = {}) {
   const context = vm.createContext({ exports: {}, require: createRequire(path.resolve(file)), ...globals });

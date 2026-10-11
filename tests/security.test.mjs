@@ -6,6 +6,9 @@ import path from 'node:path';
 import { scryptSync } from 'node:crypto';
 import ts from 'typescript';
 import sharp from 'sharp';
+import { patchTsResolution } from './helpers/ts-require.mjs';
+
+patchTsResolution();
 
 test('auth, consent, image validation, blank rejection, closed review gate and rate limits', async () => {
   const salt = Buffer.alloc(16, 9);

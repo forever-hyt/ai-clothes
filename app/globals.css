@@ -402,6 +402,13 @@ select:focus-visible,summary:focus-visible { outline:2px solid #7a9f69; outline-
 .password-field .text-button { display:block; margin-left:auto; }
 .login-availability { font-size:14px; line-height:1.8; }
 .login-availability .primary { margin-top:16px; }
+/* —— Supabase 模式登录/注册对话框 —— */
+.auth-tabs { display:flex; gap:6px; padding:5px; background:#edf1e7; border-radius:12px; margin:0 0 14px; }
+.auth-tabs button { flex:1; min-height:40px; border:0; border-radius:9px; background:transparent; color:var(--muted); font:inherit; font-size:14px; cursor:pointer; }
+.auth-tabs button[aria-selected="true"] { background:#fff; color:var(--green); font-weight:600; box-shadow:0 1px 3px rgba(36,78,61,0.08); }
+.auth-tabs button:disabled { cursor:default; opacity:0.6; }
+.dialog-note { font-size:12px; color:var(--muted); background:#f6f8f1; border:1px solid var(--line); border-radius:8px; padding:9px 12px; margin:0 0 12px; line-height:1.6; }
+.auth-switch { margin:12px auto 0; }
 :lang(en) .brand { letter-spacing:0; }
 :lang(en) .hero h1 { font-size:clamp(30px,3.5vw,46px); }
 @media (max-width:1050px) {
@@ -511,3 +518,66 @@ select:focus-visible,summary:focus-visible { outline:2px solid #7a9f69; outline-
 .legal-links { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:0; list-style:none; }
 .legal-links a { display:block; color:var(--green); border:1px solid var(--line); padding:16px; background:white; border-radius:10px; font-size:13px; line-height:1.7; text-underline-offset:3px; }
 @media(max-width:560px) { .legal-links { grid-template-columns:1fr; } .safety-banner { padding:14px; } }
+
+/* 工作台四分区(Zone 1–4)与演示 Credits 计费界面。 */
+.studio-zones { display:flex; flex-direction:column; gap:22px; min-width:0; }
+.zone-card { background:#fff; border:1px solid var(--line); border-radius:20px; padding:22px; min-width:0; box-shadow:0 8px 30px #233d2205; }
+.zone-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:18px; }
+.zone-head h3 { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; margin:0; }
+.zone-head > span { font-size:10px; color:#758469; background:#f1f5eb; padding:7px 10px; border-radius:7px; white-space:nowrap; text-align:center; }
+.zone-consents { margin-top:18px; }
+.zone-consents .text-button { display:block; }
+.params-label { font-size:12px; color:#687b60; margin:0 0 8px; }
+.quality-seg { display:flex; gap:6px; padding:5px; background:#edf1e7; border:1px solid var(--line); border-radius:12px; }
+.quality-seg button { flex:1; min-height:44px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; border:0; border-radius:8px; background:transparent; color:#60715a; font:inherit; font-size:12px; padding:6px; }
+.quality-seg button small { font-size:10px; color:#8a9582; font-variant-numeric:tabular-nums; }
+.quality-seg button[aria-pressed=true] { background:#fff; color:var(--green); box-shadow:0 2px 8px #244e3d0c; font-weight:600; }
+.quality-seg button[aria-pressed=true] small { color:#60715a; }
+.credits-label { font-size:12px; color:#687b60; margin:0; }
+.credits-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:14px; }
+.credit-chip { display:inline-flex; align-items:center; gap:5px; padding:9px 13px; border:1px solid #dfe6d7; border-radius:10px; background:#f6f8f1; color:var(--green); font-size:11px; }
+.credit-chip strong { font-size:14px; font-variant-numeric:tabular-nums; }
+.credit-chip.frozen { background:#fbf3e3; border-color:#eadfc4; color:#8c7245; }
+.credits-note { font-size:10px; color:#8b9784; line-height:1.8; margin:8px 0 0; }
+.ledger-details { border-top:1px solid var(--line); margin-top:16px; padding-top:10px; font-size:12px; color:#657a5c; }
+.ledger-details summary { min-height:44px; cursor:pointer; padding:12px 0; }
+.ledger-list { max-height:220px; overflow:auto; border:1px solid #e8eddf; border-radius:8px; background:#fbfcf8; }
+.ledger-list > .credits-note { padding:12px; margin:0; }
+.ledger-entry { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 12px; font-size:11px; border-bottom:1px dashed #e8eddf; }
+.ledger-entry:last-child { border-bottom:0; }
+.ledger-entry time { color:#8a9582; font-variant-numeric:tabular-nums; }
+.ledger-entry .plus { color:#356747; font-weight:600; }
+.ledger-entry .minus { color:#b14f45; font-weight:600; }
+.task-progress { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; list-style:none; margin:0 0 16px; padding:0; }
+.task-progress li { display:flex; flex-direction:column; align-items:center; gap:7px; text-align:center; font-size:10px; color:#8a9582; }
+.task-progress .stage-dot { display:grid; place-items:center; width:28px; height:28px; border:1px solid #dde5d6; border-radius:50%; background:#f7faf1; font-size:10px; font-variant-numeric:tabular-nums; }
+.task-progress li.done .stage-dot, .task-progress li.active .stage-dot { background:var(--green); border-color:var(--green); color:#fff; }
+.task-progress li.active { color:var(--green); font-weight:600; }
+.task-progress li.failed .stage-dot { background:#b14f45; border-color:#b14f45; color:#fff; }
+.task-progress li.failed { color:#b14f45; }
+.frozen-notice { background:#fbf3e3; border:1px solid #eadfc4; color:#8c7245; border-radius:8px; padding:10px 12px; font-size:12px; line-height:1.7; margin:0 0 12px; }
+.cancel-task { width:100%; margin-bottom:12px; }
+.failure-alert { background:#fff3ee; border:1px solid #efd4ca; border-radius:12px; padding:14px; color:#a33c35; margin-bottom:12px; }
+.failure-alert > strong { display:block; font-size:13px; margin-bottom:6px; }
+.failure-alert p { font-size:12px; line-height:1.8; margin:6px 0 0; }
+.failure-alert .failure-tip { font-size:11px; color:#8a6a5e; }
+.failure-actions { display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+.failure-actions .primary { margin:0; }
+.demo-toggle { display:flex; align-items:flex-start; gap:9px; padding:10px 12px; background:#f7f9f2; border:1px solid #e3e9d9; border-radius:10px; font-size:11px; line-height:1.7; color:#687b60; margin-bottom:12px; cursor:pointer; }
+.demo-toggle input { width:16px; height:16px; margin-top:3px; flex-shrink:0; accent-color:var(--green); }
+.idempotency-key { font-size:10px; color:#8b9784; line-height:1.7; margin:10px 0 0; overflow-wrap:anywhere; }
+.idempotency-key code { font-family:ui-monospace,Consolas,monospace; font-size:9px; color:#6f7f6a; background:#f4f7ee; border-radius:4px; padding:1px 5px; }
+.idempotency-key small { display:block; }
+.submit-note { text-align:center; margin-top:10px; }
+.result-pill { font-size:9px; color:#8c7245; background:#f5efe2; border:1px solid #e9dfc9; padding:6px 9px; border-radius:20px; text-align:center; }
+.result-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:12px; }
+.result-actions a, .result-actions button { flex:1; min-width:140px; }
+.saved-badge { display:inline-flex; align-items:center; gap:6px; font-size:10px; color:#356747; background:#e7efdf; border:1px solid #cfe0c4; border-radius:20px; padding:6px 10px; }
+.save-note { font-size:10px; color:#8b9784; line-height:1.8; margin:8px 0 0; }
+.result-gone { background:#fff3ee; border:1px solid #efd4ca; color:#a33c35; border-radius:8px; padding:10px; font-size:11px; line-height:1.7; margin-top:10px; }
+.result-gone .text-button { display:inline; margin-left:8px; }
+@media (max-width:560px) {
+  .zone-card { padding:16px; }
+  .task-progress { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+  .result-actions a, .result-actions button { min-width:0; }
+}
